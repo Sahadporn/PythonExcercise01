@@ -7,7 +7,7 @@ def main():
 
     # connect to mongodb
     client = MongoClient(host="mongodb://localhost:27017/", username="root", password="root")
-    db = client["nisitInfo"]
+    db = client["nisitInfoRedis"]
     info_coll = db["info"]
 
     # connect to redis
@@ -21,18 +21,18 @@ def main():
     channel = connection.channel()
 
     # decleare exchage and queue
-    channel.exchange_declare(exchange='test', exchange_type='fanout')
+    channel.exchange_declare(exchange='test', exchange_type='fanout', durable=True)
 
-    result = channel.queue_declare(queue='', exclusive=True)
-    queue_name = result.method.queue
+    result = channel.queue_declare(queue='queueinfo', durable=True)
+    # queue_name = result.method.queue
 
-    channel.queue_bind(exchange='test', queue=queue_name)
+    channel.queue_bind(exchange='test', queue='queueinfo')
 
     print(' [*] Waiting for data. To exit press CTRL+C')
 
     def callback(ch, method, properties, body):
         content = json.loads(body)
-        print(" [x] %r" % json.loads(body))
+        print(" [x] %r \n" % json.loads(body))
         
         # check id from redis
         if redis_client.get(content['_id']) == None:
@@ -58,10 +58,12 @@ def main():
                 'age': int(content['age'])
                 }})
                 
-            print("Update Success: ", res)
+            print("Update Success: %r \n" % res)
+
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
     channel.basic_consume(
-        queue=queue_name, on_message_callback=callback, auto_ack=True)
+        queue='queueinfo', on_message_callback=callback)
 
     channel.start_consuming()
 
