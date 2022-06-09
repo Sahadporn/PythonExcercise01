@@ -1,9 +1,9 @@
 import pika, json, sys, os, csv
 
 def convert_to_dict(_id, name, age: int):
-    message = {"_id": _id, 
-                "name": name,
-                "age": age}
+    message = {'_id': _id, 
+                'name': name,
+                'age': age}
     return message
 
 def publish(channel, body, message):
@@ -15,7 +15,7 @@ def publish(channel, body, message):
                             delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE
                         ))
 
-    print(" [x] Sent %r \n" % message)
+    print('[x] Sent %r \n' % message)
 
 def main():
     cred = pika.credentials.PlainCredentials('root', 'root')
@@ -25,7 +25,10 @@ def main():
     channel = connection.channel()
 
     channel.exchange_declare(exchange='test', exchange_type='fanout', durable=True)
-    # channel.queue_declare(queue='info', durable=True)
+    
+    channel.queue_declare(queue='queueinfo', durable=True)
+
+    channel.queue_bind(exchange='test', queue='queueinfo')
 
     print('To exit press CTRL+C')
 
@@ -41,12 +44,12 @@ def main():
             break
 
     while method:
-        _id = input("id: ")
-        name = input("name: ")
-        age = int(input("age: "))
+        _id = input('id: ')
+        name = input('name: ')
+        age = int(input('age: '))
         message = convert_to_dict(_id, name, age)
 
-        publish(channel, json.dumps(message), message)
+        publish(channel=channel, body=json.dumps(message), message=message)
 
     while not method:
         i = input('\ninput file name: ')
@@ -54,7 +57,7 @@ def main():
             csvreader = csv.reader(file)
             for row in csvreader:
                 message = convert_to_dict(row[0], row[1], int(row[2]))
-                publish(channel, json.dumps(message), message)
+                publish(channel=channel, body=json.dumps(message), message=message)
 
     connection.close()
 

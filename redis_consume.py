@@ -1,14 +1,14 @@
+from datetime import datetime
 import pika, sys, os, json
-from pymongo import MongoClient, errors
+from pymongo import MongoClient
 import redis
-import arrow
 
 def main():
 
     # connect to mongodb
-    client = MongoClient(host="mongodb://localhost:27017/", username="root", password="root")
-    db = client["nisitInfoRedis"]
-    info_coll = db["info"]
+    client = MongoClient(host='mongodb://localhost:27017/', username='root', password='root')
+    db = client['nisitInfoRedis']
+    info_coll = db['info']
 
     # connect to redis
     redis_client = redis.StrictRedis(host='localhost', port=6379, password='root')
@@ -23,8 +23,7 @@ def main():
     # decleare exchage and queue
     channel.exchange_declare(exchange='test', exchange_type='fanout', durable=True)
 
-    result = channel.queue_declare(queue='queueinfo', durable=True)
-    # queue_name = result.method.queue
+    channel.queue_declare(queue='queueinfo', durable=True)
 
     channel.queue_bind(exchange='test', queue='queueinfo')
 
@@ -35,30 +34,36 @@ def main():
         print(" [x] %r \n" % json.loads(body))
         
         # check id from redis
-        if redis_client.get(content['_id']) == None:
+        if redis_client.get(content['_id']) is None:
             
             # get utc date and merge to existing content
             date = {
-                'created_at': str(arrow.utcnow()),
-                'updated_at': str(arrow.utcnow())
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
             }
 
             merged = {**content, **date}
 
             # save new data to redis and mongodb
-            redis_client.set(merged['_id'], merged['created_at'])
+            redis_client.set(merged['_id'], str(merged['created_at']))
             res = info_coll.insert_one(merged)
 
-            print("Save Success: ", res.inserted_id)
+            print('Save Success')
 
         else:
-            res = info_coll.update_one({'_id': content['_id']}, {'$set': {
-                'updated_at': str(arrow.utcnow()),
-                'name': content['name'],
-                'age': int(content['age'])
-                }})
+            res = info_coll.update_one(
+                {'_id': content['_id']}, 
+                {
+                    '$currentDate': {
+                       'updated_at': True
+                    },
+                    '$set': {
+                        'name': content['name'],
+                        'age': int(content['age'])
+                    }
+                })
                 
-            print("Update Success: %r \n" % res)
+            print('Update Success')
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 

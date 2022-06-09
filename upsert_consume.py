@@ -1,14 +1,13 @@
+from datetime import datetime
 import pika, sys, os, json
-from pymongo import MongoClient, errors
-import redis
-import arrow
+from pymongo import MongoClient
 
 def main():
 
     # connect to mongodb
-    client = MongoClient(host="mongodb://localhost:27017/", username="root", password="root")
-    db = client["nisitInfo"]
-    info_coll = db["info"]
+    client = MongoClient(host='mongodb://localhost:27017/', username='root', password='root')
+    db = client['nisitInfo']
+    info_coll = db['info']
 
     # connect to rabbitmq
     cred = pika.credentials.PlainCredentials('root', 'root')
@@ -20,8 +19,7 @@ def main():
     # decleare exchage and queue
     channel.exchange_declare(exchange='test', exchange_type='fanout', durable=True)
 
-    result = channel.queue_declare(queue='queueinfo', durable=True)
-    # queue_name = result.method.queue
+    channel.queue_declare(queue='queueinfo', durable=True)
 
     channel.queue_bind(exchange='test', queue='queueinfo')
 
@@ -30,42 +28,30 @@ def main():
     def callback(ch, method, properties, body):
         content = json.loads(body)
 
-        # Testing pymongo transaction
-        # with client.start_session() as session:
-        #     with session.start_transaction():
-        #         print(" [x] %r" % json.loads(body))
-
-        #         res = info_coll.update_one(
-        #             {'_id': content['_id']},
-        #             {"$set": {'updated_at': str(arrow.utcnow()),
-        #                     'name': content['name'],
-        #                     'age': int(content['age'])},
-        #              "$setOnInsert": {'created_at': str(arrow.utcnow())}
-        #             },
-        #             upsert = True,
-        #             session=session
-        #         )
-        #         print("Success: %r \n" % res.upserted_id)
-
-        print(" [x] %r" % json.loads(body))
+        print(' [x] %r \n' % json.loads(body))
 
         res = info_coll.update_one(
             {'_id': content['_id']},
-            {"$set": {'updated_at': str(arrow.utcnow()),
+            {
+             '$currentDate': {
+                'updated_at': True
+             },
+             '$set': {
                     'name': content['name'],
                     'age': int(content['age'])},
-             "$setOnInsert": {'created_at': str(arrow.utcnow())}
+             '$setOnInsert': {'created_at': datetime.utcnow()}
             },
             upsert = True
         )
-        print("Success: %r \n" % res.upserted_id)
+        if res.upserted_id is None:
+            print('Update Success')
+        else:
+            print('Save Success')
+
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     channel.basic_consume(
         queue='queueinfo', on_message_callback=callback, auto_ack=False)
-
-    # channel.basic_consume(
-        # queue='info', on_message_callback=callback, auto_ack=False)
 
     channel.start_consuming()
 
